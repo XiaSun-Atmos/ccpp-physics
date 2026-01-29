@@ -3,13 +3,18 @@
 
 !>  This Model ontains all of the code related to running the MYNN surface layer scheme
       MODULE mynnsfc_wrapper
-
+          USE netcdf
           USE module_sf_mynn
+          implicit none
+          
+          ! Module variables to keep file open between calls
+          integer, save :: ncid
+          integer, save :: varid_u1d
+          logical, save :: file_initialized = .false.
 
           !Global variables:
           INTEGER, PARAMETER :: psi_opt = 0   !0: MYNN
                                               !1: GFS
-
       contains
 
 !>\defgroup mynn_sfc MYNN Surface Layer Module
@@ -47,6 +52,46 @@
            print*,"psih_unstab(0-1):",psih_unstab(0),psih_unstab(1)
          ENDIF
 
+         ! initialize tables for psih and psim (stable and unstable)
+         CALL init_input(file="/home/Xia.Sun/scratch4_wrfruc/dev/scms/ccpp-scm-v7/scm/test/input2.nc")         
+         open(2, file = '/home/Xia.Sun/scratch4_wrfruc/dev/scms/ccpp-scm-v7/scm/test/ccpp_output_lnd.txt')
+         write(2,*) 'itimestep iter T2 Q2 TH2 U10 V10 HFX LH UST_lnd PBLH'                                         
+         open(1, file = '/home/Xia.Sun/scratch4_wrfruc/dev/scms/ccpp-scm-v7/scm/test/ccpp_input_lnd.txt')
+         write(1,'(A)') 'flag_iter U1D V1D T1D QV1D P1D dz8w1d '        //&
+                        'U1D2 V1D2 dz2w1d '                                    //&
+                        'PSFCPA PBLH MAVAIL XLAND DX '                  //&
+                        'ISFFLX isftcflx iz0tlnd psi_opt '                    //&
+                        'compute_flux compute_diag  '                          //&
+                        'sigmaf vegtype shdmax ivegsrc '                      //&  !intent(in)
+                        'z0pert ztpert '                                       //&  !intent(in)
+                        'redrag sfc_z0_type  '                                 //&  !intent(in)
+                        'itimestep iter flag_restart lsm lsm_ruc '             //&
+                        '     wet           dry           icy '               //&  !intent(in)
+                        'tskin_wat     tskin_lnd     tskin_ice '               //&  !intent(in)
+                        'tsurf_wat     tsurf_lnd     tsurf_ice '               //&  !intent(in)
+                        ' qsfc_wat      qsfc_lnd      qsfc_ice '               //&  !intent(in)
+                        'snowh_wat     snowh_lnd     snowh_ice '               //&  !intent(in)
+                        '  ZNT_wat       ZNT_lnd       ZNT_ice '               //&  !intent(inout)
+                        '  UST_wat       UST_lnd       UST_ice '               //&  !intent(inout)
+                        '   cm_wat        cm_lnd        cm_ice '              //&  !intent(inout)
+                        '   ch_wat        ch_lnd        ch_ice '               //&  !intent(inout)
+                        '   rb_wat        rb_lnd        rb_ice '               //&  !intent(inout)
+                       'stress_wat    stress_lnd    stress_ice '  //& 
+                'psix_wat     psix_lnd     psix_ice '              //&  !=fm intent(inout)
+              'psix_wat         psix_lnd         psix_ice '                  //&
+               'psit_wat         psit_lnd         psit_ice '                  //&
+             'psix10_wat       psix10_lnd       psix10_ice '                  //&
+              'psit2_wat        psit2_lnd        psit2_ice '                  //&
+               'HFLX_wat         HFLX_lnd         HFLX_ice '                  //&
+               'QFLX_wat         QFLX_lnd         QFLX_ice '                  //&
+             'ch    CHS    CHS2    CQS2    CPM '                                    //&
+             'ZNT    USTM    ZOL    MOL    RMOL '                                   //&
+             'PSIM    PSIH '                                               //&
+             'HFLX    HFX    QFLX    QFX    LH    FLHC    FLQC '                  //&
+             'QGH    QSFC '                                                //&
+             'U10    V10    TH2    T2    Q2 '                                     //&
+             'GZ1OZ0    WSPD    wstar    qstar '                                 //&
+             'spp_sfc    rstoch1D '                                                                          
       end subroutine mynnsfc_wrapper_init
 
 !> \section arg_table_mynnsfc_wrapper_run Argument Table
@@ -123,7 +168,7 @@ SUBROUTINE mynnsfc_wrapper_run(            &
       integer, intent(in) :: isftcflx,iz0tlnd
       integer, intent(in) :: im, levs
       integer, intent(in) :: iter, itimestep, lsm, lsm_ruc
-      logical, dimension(:), intent(in) :: flag_iter
+      logical, dimension(:), intent(in) :: flag_iter      
       logical, intent(in) :: flag_init,flag_restart,lprnt
       integer, intent(in) :: ivegsrc
       integer, intent(in) :: sfc_z0_type ! option for calculating surface roughness length over ocean
@@ -296,6 +341,11 @@ SUBROUTINE mynnsfc_wrapper_run(            &
 
 !$acc exit data delete(qsfc_lnd_ruc, qsfc_ice_ruc)
 !$acc exit data delete(phii, qvsh, slmsk)
+        print *,' ITIMESTEPP is ',itimestep
+        print *,' u(1,1) is ',u(1,1)
+        print *,' u(1,128) ',u(1,128)
+        print *,' u is ',u
+        CALL write_timestep_input(itimestep=itimestep, u1d=u(1,1))
 
         CALL SFCLAY_mynn(                                                     &
              u3d=u,v3d=v,t3d=t3d,qv3d=qv,p3d=prsl,dz8w=dz,                    &
@@ -403,7 +453,69 @@ SUBROUTINE mynnsfc_wrapper_run(            &
 
 
   END SUBROUTINE mynnsfc_wrapper_run
+  
+  subroutine init_input(file)
+    character(len=*), intent(in) :: file
+    !
+    integer :: ncid, status
+    integer :: dimid_time     ! Dimension ID for time
 
+    print *, "Initializing NetCDF file: ", trim(file)
+
+    ! Create file
+    status = nf90_create(path=trim(file), cmode=nf90_clobber, ncid=ncid)
+    if (status /= nf90_noerr) call handle_err(status)
+
+    ! Define time as UNLIMITED dimension
+    status = nf90_def_dim(ncid, "itimestep", NF90_UNLIMITED, dimid_time)
+    if (status /= nf90_noerr) call handle_err(status)
+
+    ! Define variables - all depend on time
+    ! Temperature: 4D (x, y, z, time)
+    status = nf90_def_var(ncid, "u1d", NF90_REAL,[dimid_time], varid_u1d)
+
+    ! Add attributes
+    status = nf90_put_att(ncid, varid_u1d, "units", "m/s")
+
+    ! End define mode
+    status = nf90_enddef(ncid)
+    if (status /= nf90_noerr) call handle_err(status)
+    
+    file_initialized = .true.
+    print *, "NetCDF file initialized successfully"
+    
+  end subroutine init_input
+
+  subroutine write_timestep_input(itimestep, u1d)
+    integer, intent(in) :: itimestep
+    real, intent(in) :: u1d
+    integer :: status
+    if (.not. file_initialized) then
+      print *, "Error: NetCDF file not initialized!"
+      stop
+    end if
+   ! Write scalar variable for this timestep
+    status = nf90_put_var(ncid, varid_u1d, u1d, &
+                          start=[itimestep])
+    if (status /= nf90_noerr) call handle_err(status)    
+
+    ! Close file
+    status = nf90_close(ncid)
+    if (status /= nf90_noerr) call handle_err(status)
+    
+  end subroutine write_timestep_input
+
+  ! #########################################################################################
+  ! Error handling for NetCDF
+  ! #########################################################################################
+  subroutine handle_err(status)
+    use netcdf
+    integer, intent(in) :: status
+    if (status /= nf90_noerr) then
+       print*,trim(nf90_strerror(status))
+
+    end if
+  end subroutine handle_err
 !>@}
 
 END MODULE mynnsfc_wrapper

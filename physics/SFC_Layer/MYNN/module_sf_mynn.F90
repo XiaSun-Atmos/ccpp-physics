@@ -22,7 +22,7 @@ MODULE module_sf_mynn
 !4) Uses the blended Monin-Obukhov flux-profile relationships COARE (Fairall
 !   et al 2003) for the unstable regime (a blended mix of Dyer-Hicks 1974 and
 !   Grachev et al (2000). Uses Cheng and Brutsaert (2005) for stable conditions.
-!5) The following overviews the namelist variables that control the
+!5integration_length_sec) The following overviews the namelist variables that control the
 !   aerodynamic roughness lengths (over water) and the thermal and moisture
 !   roughness lengths (defaults are recommended):
 !
@@ -102,9 +102,10 @@ MODULE module_sf_mynn
   real(kind_phys), parameter :: COARE_OPT     = 3.0  ! 3.0 or 3.5
 
   !For debugging purposes:
-  INTEGER, PARAMETER :: debug_code = 0  !0: no extra ouput
+  INTEGER, PARAMETER :: debug_code = 2  !0: no extra ouput
                                         !1: check input
                                         !2: everything - heavy I/O
+
 
   REAL(kind_phys), DIMENSION(0:1000 ),SAVE :: psim_stab,psim_unstab, &
                                      psih_stab,psih_unstab
@@ -396,6 +397,8 @@ CONTAINS
         write(*,*)"Rd=",    Rd," ep1=",    ep1
         write(*,*)"xlv=",  XLV," xlf=",   XLF
         write(*,*)"ep2=", ep2
+        write(*,*)"compute_diag=", compute_diag
+        write(*,*)"compute_flux=", compute_flux
       ENDIF
 
       itf=ite !MIN0(ite,ide-1)
@@ -417,6 +420,12 @@ CONTAINS
          QC1D(i)=QC3D(i,kts)
          P1D(i) =P3D(i,kts)
          T1D(i) =T3D(i,kts)
+         !-----------------Code block to get SCM input for mynn sfc scheme-----------------------------------------
+         IF (debug_code >= 2) THEN
+            write(0,*)"U1D=",U1D(i)," V1D=",V1D(i)," U1D2=",U1D2(i)," V1D2=",V1D2(i)," dz8w1d=",dz8w1d(I)
+            !call write_timestep_input(itimestep,U1D(i))
+         ENDIF
+         !-----------------Code block to get SCM input for mynn sfc scheme-----------------------------------------
          if (spp_sfc==1) then
             rstoch1D(i)=pattern_spp_sfc(i,kts)
          else
@@ -917,10 +926,84 @@ CONTAINS
         DO I=its,ite
            write(0,*)"=== important input to mynnsfclayer, i:", i
            IF (dry(i)) THEN
+             ! output data to file 
+             open(1, file = '/home/Xia.Sun/scratch4_wrfruc/dev/scms/ccpp-scm-v7/scm/test/ccpp_input_lnd.txt')
+             !write(1,*) flag_iter,J,U1D(i),V1D(i),T1D(i),QV1D,P1DITIMESTEP,iter,pblh(i)
+             IF (iter ==1 ) THEN
+                write(1,'(L5,E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'I5,I5,I5,I5,' // &
+                         'L5,L5,' // &
+                         'E15.3,I5,E15.3,I5,' // &
+                         'E15.3,E15.3,' // &
+                         'L5,I5,' // &
+                         'I5,I5,L5,I5,I5,' // &
+                         'L5,L5,L5,'      // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,'   //& !stress 
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,' // & !add one extra line
+                         'E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,E15.3,E15.3,' // &
+                         'E15.3,E15.3,E15.3,E15.3,' // &
+                         'I5,E15.3)')                                                  &
+                            flag_iter,                                                    &
+                            U1D(i),V1D(i),T1D(i),QV1D(i),P1D(i),dz8w1d(i),              &
+                            U1D2(i),V1D2(i),dz2w1d(i),                                    &
+                            PSFCPA(i),PBLH(i),MAVAIL(i),XLAND(i),DX(i),                   &
+                            ISFFLX,isftcflx,iz0tlnd,psi_opt,                              &
+                            compute_flux,compute_diag,                                    &
+                            sigmaf(i),vegtype(i),shdmax(i),ivegsrc,                       &  !intent(in)
+                            z0pert(i),ztpert(i),                                          &  !intent(in)
+                            redrag,sfc_z0_type,                                           &  !intent(in)
+                            itimestep,iter,flag_restart,lsm,lsm_ruc,                      &
+                                  wet(i),          dry(i),          icy(i),               &  !intent(in)
+                            tskin_wat(i),    tskin_lnd(i),    tskin_ice(i),               &  !intent(in)
+                            tsurf_wat(i),    tsurf_lnd(i),    tsurf_ice(i),               &  !intent(in)
+                             qsfc_wat(i),     qsfc_lnd(i),     qsfc_ice(i),               &  !intent(in)
+                            snowh_wat(i),    snowh_lnd(i),    snowh_ice(i),               &  !intent(ing                              ZNT_wat(i),      ZNT_lnd(i),      ZNT_ice(i),               &  !intent(inout)
+                              UST_wat(i),      UST_lnd(i),      UST_ice(i),               &  !intent(inout)
+                               cm_wat(i),       cm_lnd(i),       cm_ice(i),               &  !intent(inout)
+                               ch_wat(i),       ch_lnd(i),       ch_ice(i),               &  !intent(inout)
+                               rb_wat(i),       rb_lnd(i),       rb_ice(i),               &  !intent(inout)
+                           stress_wat(i),   stress_lnd(i),   stress_ice(i) ,               &  !intent(inout)
+                           psix_wat(i),     psix_lnd(i),     psix_ice(i),              &  !=fm(i), intent(inout)
+                           psit_wat(i),     psit_lnd(i),     psit_ice(i),              &  !=fh(i), intent(inout)
+                         psix10_wat(i),   psix10_lnd(i),   psix10_ice(i),              &  !=fm10(i), intent(inout)
+                          psit2_wat(i),    psit2_lnd(i),    psit2_ice(i),              &  !=fh2(i), intent(inout)
+                           HFLX_wat(i),     HFLX_lnd(i),     HFLX_ice(i),              &
+                           QFLX_wat(i),     QFLX_lnd(i),     QFLX_ice(i),              &
+                         ch(i),CHS(i),CHS2(i),CQS2(i),CPM(i),                                &
+                         ZNT(i),USTM(i),ZOL(i),MOL(i),RMOL(i),                               &
+                         PSIM(i),PSIH(i),                                           &
+                         HFLX(i),HFX(i),QFLX(i),QFX(i),LH(i),FLHC(i),FLQC(i),                      &
+                         QGH(i),QSFC(i),                                            &
+                         U10(i),V10(i),TH2(i),T2(i),Q2(i),                                   &
+                         GZ1OZ0(i),WSPD(i),wstar(i),qstar(i),                             &
+                         spp_sfc,rstoch1D(i)                   !intent(inout)
+                ENDIF
              write(0,*)"dry=",dry(i)," pblh=",pblh(i)," tsk=", tskin_lnd(i),&
              " tsurf=", tsurf_lnd(i)," qsfc=", qsfc_lnd(i)," znt=", znt_lnd(i),&
              " ust=", ust_lnd(i)," snowh=", snowh_lnd(i)," psfcpa=",PSFCPA(i),  &
-             " dz=",dz8w1d(i)," qflx=",qflx(i)," hflx=",hflx(i)," hpbl=",pblh(i)
+             " dz=",dz8w1d(i)," qflx=",qflx(i)," hflx=",hflx(i)," hpbl=",pblh(i),&
+             " hfx=",hfx(i)," qfx=",qfx(i)
            ENDIF
            IF (icy(i)) THEN
              write(0,*)"icy=",icy(i)," pblh=",pblh(i)," tsk=", tskin_ice(i),&
@@ -2046,6 +2129,9 @@ CONTAINS
        IF(icy(i))write(*,*)"U*:",UST_ice(I)," Z0:",ZNTstoch_ice(I)," Zt:",zt_ice(I)
        write(*,*)"hfx:",HFX(I)," MAVAIL:",MAVAIL(I)," QVSH(I):",QVSH(I)
        write(*,*)"============================================="
+
+      
+
     ENDDO ! end i-loop
  ENDIF
 !$acc end serial
@@ -2235,7 +2321,7 @@ CONTAINS
       ENDIF
 
       IF (debug_code > 1) THEN
-         write(*,*)"QFX=",QFX(I),"FLQC=",FLQC(I)
+         write(*,*)"QFX=",QFX(I),"FLQC=",FLQC(I),"HFX=",HFX(I)
          if(icy(i))write(*,*)"ice, MAVAIL:",MAVAIL(I)," u*=",UST_ice(I)," psiq=",PSIQ_ice(i)
          if(dry(i))write(*,*)"lnd, MAVAIL:",MAVAIL(I)," u*=",UST_lnd(I)," psiq=",PSIQ_lnd(i)
          if(wet(i))write(*,*)"ocn, MAVAIL:",MAVAIL(I)," u*=",UST_wat(I)," psiq=",PSIQ_wat(i)
@@ -2385,6 +2471,19 @@ IF (compute_diag) then
          Q2(I)= MIN(Q2(I), 1.05*QV1D(I))
       ENDIF
      endif ! flag_iter
+
+     !-----------------Code block to get SCM output for mynn sfc scheme-----------------------------------------
+     IF (debug_code >= 2) THEN
+        write(0,*)"T2=",T2(I)," Q2=",Q2(I)," TH2=",TH2(I)," U10=",U10(i)," V10=",V10(I)
+         ! output data to file 
+         IF (iter == 1) THEN
+             open(2, file = '/home/Xia.Sun/scratch4_wrfruc/dev/scms/ccpp-scm-v7/scm/test/ccpp_output_lnd.txt')
+             write(2,'(I5, I5, F10.2,F10.2,F10.2,F10.2,F10.2,F10.2,F10.2,F10.2,F10.2)') itimestep,iter,T2(I),Q2(I),TH2(I),U10(i),V10(I),HFX(I),LH(I),UST_lnd(I),PBLH(I)
+         ENDIF                                         
+     
+     ENDIF
+     !-----------------Code block to get SCM input for mynn sfc scheme-----------------------------------------
+
    ENDDO
 ENDIF ! end compute_diag
 
@@ -2563,6 +2662,8 @@ ENDIF
 !$acc                    QSFCMR_lnd,   QSFCMR_ice,   QSFCMR_wat )
 
 END SUBROUTINE SFCLAY1D_mynn
+
+
 !-------------------------------------------------------------------
 !>\ingroup mynn_sfc
 !> This subroutine returns the thermal and moisture roughness lengths
