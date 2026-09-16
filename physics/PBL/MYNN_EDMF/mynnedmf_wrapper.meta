@@ -150,14 +150,14 @@
 [ccpp-arg-table]
   name = mynnedmf_wrapper_run
   type = scheme
-[im]
+[ncol]
   standard_name = horizontal_dimension
   long_name = horizontal dimension
   units = count
   dimensions = ()
   type = integer
   intent = in
-[levs]
+[nlev]
   standard_name = vertical_layer_dimension
   long_name = vertical layer dimension
   units = count
@@ -1105,7 +1105,6 @@
   type = real
   kind = kind_phys
   intent = out
-  intent = out
 [excess_h]
   standard_name = max_heat_excess_of_plume_initialization
   long_name = max heat excess of plume initialization
@@ -1495,7 +1494,6 @@
   dimensions = ()
   type = integer
   intent = in
-  intent = in
 [bl_mynn_mixscalars]
   standard_name = control_for_additional_scalars_mixing_in_mellor_yamada_nakanishi_niino_pbl_scheme
   long_name = flag to activate mixing of additional scalars
@@ -1524,7 +1522,6 @@
   dimensions = ()
   type = real
   kind = kind_phys
-  intent = in
   intent = in
 [bl_mynn_edmf_dd]
   standard_name = control_for_downdrafts_in_mellor_yamada_nakanishi_niino_pbl_scheme

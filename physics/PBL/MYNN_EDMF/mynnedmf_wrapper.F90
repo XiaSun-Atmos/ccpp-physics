@@ -89,7 +89,7 @@
 !! \htmlinclude mynnedmf_wrapper_run.html
 !!
 SUBROUTINE mynnedmf_wrapper_run(        &
-     &  im,levs,                        &
+     &  ncol,nlev,                      &
      &  flag_init,flag_restart,         &
      &  lssav, ldiag3d, qdiag3d,        &
      &  lsidea, cplflx,                 &
@@ -135,9 +135,9 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &  excess_h,excess_q,maxwidth_dd,  &
      &  maxmf_dd,maxtkeprod,            &
      &  cldtop_cooling,ent_eff,         &
-     &  lwp,iwp,swp,cldceil,wspd10,     &
-     &  wspd80,wspd160,maxcldfra,       &
-     &  maxcldfra_pbl,                  &
+     &  lwp_bl,iwp_bl,swp_bl,cldceil,   &
+     &  wspd10,wspd80,wspd160,maxcldfra,&
+     &  maxcldfra_bl,                   &
      &  dudt, dvdt, dtdt, dqdt_all,                        &
      &  dqdt_water_vapor,            dqdt_liquid_cloud,    & ! <=== ntqv, ntcw
      &  dqdt_ice,                    dqdt_snow,            & ! <=== ntiw, ntsw
@@ -243,7 +243,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
 
 !MYNN-1D
       REAL(kind_phys), intent(in) :: delt, dtf
-      INTEGER, intent(in) :: im, levs
+      INTEGER, intent(in) :: ncol, nlev
       LOGICAL, intent(in) :: flag_init, flag_restart
       INTEGER :: initflag, k, i
       INTEGER :: IDS,IDE,JDS,JDE,KDS,KDE,                                &
@@ -273,10 +273,10 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &        sub_thl,sub_sqv,det_thl,det_sqv
      !These 4 arrays are only allocated when bl_mynn_diags2d >=1
       real(kind_phys), dimension(:), intent(inout), optional ::          &
-     &        lwp,iwp,swp
+     &        lwp_bl,iwp_bl,swp_bl
      !These 5 arrays are only allocated when bl_mynn_diags2d >=2
       real(kind_phys), dimension(:), intent(out), optional ::            &
-     &        cldceil,wspd10,wspd80,wspd160,maxcldfra,maxcldfra_pbl     
+     &        cldceil,wspd10,wspd80,wspd160,maxcldfra,maxcldfra_bl
       real(kind_phys), dimension(:,:), intent(in) ::                     &
      &        t3d,qgrs_water_vapor, qgrs_liquid_cloud, qgrs_ice,         &
      &        qgrs_snow
@@ -300,7 +300,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       real(kind_phys), dimension(:,:), intent(in), optional :: spp_wts_pbl
 
      !LOCAL
-      real(kind_phys), dimension(im,levs) ::                             &
+      real(kind_phys), dimension(ncol,nlev) ::                           &
      &        sqv,sqc,sqi,sqs,qnc,qni,ozone,qnwfa,qnifa,qnbca,           &
      &        dz, w, p, rho, th, qv, delp,                               &
      &        RUBLTEN, RVBLTEN, RTHBLTEN, RQVBLTEN,                      &
@@ -313,7 +313,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       real(kind_phys), dimension(:,:,:), intent(inout), optional ::      &
      &        chem3d, settle3d
       real(kind_phys), dimension(:,:  ), intent(in), optional :: vdep
-      real(kind_phys), dimension(im)   :: emis_ant_no
+      real(kind_phys), dimension(ncol)   :: emis_ant_no
 
       !local smoke/chem arrays with additional j dimension
       real(kind_phys), allocatable, dimension(:,:,:,:) :: chem3dj, settle3dj
@@ -351,12 +351,12 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &        dusfci_cpl,dvsfci_cpl,dtsfci_cpl,dqsfci_cpl
 
      !LOCAL
-      real(kind_phys), dimension(im) ::                                  &
+      real(kind_phys), dimension(ncol) ::                                &
      &        hfx,qfx,rmol,xland,uoce,voce,znt,ts
       integer :: idtend
-      real(kind_phys), dimension(im) :: dusfci1,dvsfci1,dtsfci1,dqsfci1
+      real(kind_phys), dimension(ncol) :: dusfci1,dvsfci1,dtsfci1,dqsfci1
       real(kind_phys), allocatable :: save_qke_adv(:,:)
-      real(kind_phys), dimension(levs) :: kzero
+      real(kind_phys), dimension(nlev) :: kzero
 
       ! Initialize CCPP error handling variables
       errmsg = ''
@@ -399,7 +399,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       if (.not. flag_for_pbl_generic_tend .and. ldiag3d) then
          idtend = dtidx(ntke+100,index_of_process_pbl)
          if (idtend>=1) then
-            allocate(save_qke_adv(im,levs))
+            allocate(save_qke_adv(ncol,nlev))
             save_qke_adv=qke_adv
          endif
       endif
@@ -431,8 +431,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
          FLAG_QNWFA= .false.
          FLAG_QNIFA= .false.
          FLAG_QNBCA= .false.
-         do k=1,levs
-            do i=1,im
+         do k=1,nlev
+            do i=1,ncol
               sqv(i,k)   = qgrs_water_vapor(i,k)
               sqc(i,k)   = qgrs_liquid_cloud(i,k)
               sqi(i,k)   = qgrs_ice(i,k)
@@ -455,8 +455,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
          FLAG_QNWFA= nssl_ccn_on ! ERM: Perhaps could use this field for CCN field?
          FLAG_QNIFA= .false.
          FLAG_QNBCA= .false.
-         do k=1,levs
-            do i=1,im
+         do k=1,nlev
+            do i=1,ncol
               sqv(i,k)   = qgrs_water_vapor(i,k)
               sqc(i,k)   = qgrs_liquid_cloud(i,k)
               sqi(i,k)   = qgrs_ice(i,k)
@@ -483,8 +483,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
             FLAG_QNWFA= .true.
             FLAG_QNIFA= .true.
             FLAG_QNBCA= .false.
-            do k=1,levs
-              do i=1,im
+            do k=1,nlev
+              do i=1,ncol
                 sqv(i,k)   = qgrs_water_vapor(i,k)
                 sqc(i,k)   = qgrs_liquid_cloud(i,k)
                 sqi(i,k)   = qgrs_ice(i,k)
@@ -506,8 +506,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
             FLAG_QNWFA= .false.
             FLAG_QNIFA= .false.
             FLAG_QNBCA= .false.
-            do k=1,levs
-              do i=1,im
+            do k=1,nlev
+              do i=1,ncol
                 sqv(i,k)   = qgrs_water_vapor(i,k)
                 sqc(i,k)   = qgrs_liquid_cloud(i,k)
                 sqi(i,k)   = qgrs_ice(i,k)
@@ -529,8 +529,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
             FLAG_QNWFA= .false.
             FLAG_QNIFA= .false.
             FLAG_QNBCA= .false.
-            do k=1,levs
-              do i=1,im
+            do k=1,nlev
+              do i=1,ncol
                 sqv(i,k)   = qgrs_water_vapor(i,k)
                 sqc(i,k)   = qgrs_liquid_cloud(i,k)
                 sqi(i,k)   = qgrs_ice(i,k)
@@ -554,8 +554,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
           FLAG_QNWFA= .false.
           FLAG_QNIFA= .false.
           FLAG_QNBCA= .false.
-          do k=1,levs
-            do i=1,im
+          do k=1,nlev
+            do i=1,ncol
                 sqv(i,k)   = qgrs_water_vapor(i,k)
                 sqc(i,k)   = qgrs_liquid_cloud(i,k)
                 sqi(i,k)   = qgrs_ice(i,k)
@@ -579,8 +579,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
           FLAG_QNWFA= .false.
           FLAG_QNIFA= .false.
           FLAG_QNBCA= .false.
-          do k=1,levs
-            do i=1,im
+          do k=1,nlev
+            do i=1,ncol
                 sqv(i,k)   = qgrs_water_vapor(i,k)
                 sqc(i,k)   = qgrs_liquid_cloud(i,k)
                 sqi(i,k)   = 0.
@@ -595,8 +595,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
           enddo
         endif
 
-       do k=1,levs
-          do i=1,im
+       do k=1,nlev
+          do i=1,ncol
              tmf(i,k,1)=0.
           enddo
        enddo
@@ -604,28 +604,28 @@ SUBROUTINE mynnedmf_wrapper_run(        &
        
   ! Check incoming moist species to ensure non-negative values
   ! First, create height difference (dz)
-      do k=1,levs
-         do i=1,im
+      do k=1,nlev
+         do i=1,ncol
             dz(i,k)=(phii(i,k+1) - phii(i,k))*g_inv
          enddo
       enddo
 
-      do i=1,im
-         do k=1,levs
+      do i=1,ncol
+         do k=1,nlev
             delp(i,k) = prsi(i,k) - prsi(i,k+1)
          enddo
       enddo
 
-      do i=1,im
-         call moisture_check2(levs, delt,            &
-                              delp(i,:), exner(i,:), &
-                              sqv(i,:),  sqc(i,:),   &
-                              sqi(i,:),  kzero(:),   &
-                              adj_t(i,:)             )
-      enddo
+      ! do i=1,ncol
+      !    call moisture_check2(nlev, delt,            &
+      !                         delp(i,:), exner(i,:), &
+      !                         sqv(i,:),  sqc(i,:),   &
+      !                         sqi(i,:),  kzero(:),   &
+      !                         adj_t(i,:)             )
+      ! enddo
       
-      do k=1,levs
-         do i=1,im
+      do k=1,nlev
+         do i=1,ncol
             th(i,k)=adj_t(i,k)/exner(i,k)
             rho(i,k)=prsl(i,k)/(r_d*adj_t(i,k)*(1.+p608*max(sqv(i,k),1e-8)))
             w(i,k) = -omega(i,k)/(rho(i,k)*grav)
@@ -633,7 +633,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       enddo
       
       !intialize more variables
-      do i=1,im
+      do i=1,ncol
          if (slmsk(i)==1. .or. slmsk(i)==2.) then !sea/land/ice mask (=0/1/2) in FV3
             xland(i)=1.0                          !but land/water = (1/2) in SFCLAY_mynn
          else
@@ -675,7 +675,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
 
       ! BWG: Coupling insertion
       if (cplflx) then
-        do i=1,im
+        do i=1,ncol
           if (oceanfrac(i) > zero) then ! Ocean only, NO LAKES
             if ( .not. wet(i)) then ! no open water, use results from CICE
               dusfci_cpl(i) = dusfc_cice(i)
@@ -714,22 +714,22 @@ SUBROUTINE mynnedmf_wrapper_run(        &
 
       ! local smoke/chem array with additional j dimension
       if (present(chem3d)) then
-         allocate(chem3dj(im,levs,1,nchem))
+         allocate(chem3dj(ncol,nlev,1,nchem))
          chem3dj(:,:,1,:)=chem3d(:,:,:)
       end if
       if (present(settle3d)) then
-         allocate(settle3dj(im,levs,1,nchem))
+         allocate(settle3dj(ncol,nlev,1,nchem))
          settle3dj(:,:,1,:)=settle3d(:,:,:)
       end if
       if (present(vdep)) then
-         allocate(vdepj(im,1,nchem))
+         allocate(vdepj(ncol,1,nchem))
          vdepj(:,1,:)=vdep(:,:)
       end if
       if (present(frp)) then
-         allocate(frpj(im,1))
+         allocate(frpj(ncol,1))
          frpj(:,1)=frp(:)
       end if
-      allocate(emis_ant_noj(im,1))
+      allocate(emis_ant_noj(ncol,1))
       emis_ant_noj(:,1)=emis_ant_no(:)
 
       if (lprnt) then
@@ -741,17 +741,17 @@ SUBROUTINE mynnedmf_wrapper_run(        &
          print*,"bl_mynn_edmf_tke=",bl_mynn_edmf_tke
          print*,"bl_mynn_cloudmix=",bl_mynn_cloudmix," bl_mynn_mixqt=",bl_mynn_mixqt
          print*,"bl_mynn_edmf_dd=",bl_mynn_edmf_dd
-         print*,"T:",adj_t(1,1),adj_t(1,2),adj_t(1,levs)
-         print*,"TH:",th(1,1),th(1,2),th(1,levs)
-         print*,"rho:",rho(1,1),rho(1,2),rho(1,levs)
-         print*,"exner:",exner(1,1),exner(1,2),exner(1,levs)
-         print*,"prsl:",prsl(1,1),prsl(1,2),prsl(1,levs)
-         print*,"dz:",dz(1,1),dz(1,2),dz(1,levs)
-         print*,"u:",u(1,1),u(1,2),u(1,levs)
-         print*,"v:",v(1,1),v(1,2),v(1,levs)
-         print*,"sqv:",sqv(1,1),sqv(1,2),sqv(1,levs)
-         print*,"sqc:",sqc(1,1),sqc(1,2),sqc(1,levs)
-         print*,"sqi:",sqi(1,1),sqi(1,2),sqi(1,levs)
+         print*,"T:",adj_t(1,1),adj_t(1,2),adj_t(1,nlev)
+         print*,"TH:",th(1,1),th(1,2),th(1,nlev)
+         print*,"rho:",rho(1,1),rho(1,2),rho(1,nlev)
+         print*,"exner:",exner(1,1),exner(1,2),exner(1,nlev)
+         print*,"prsl:",prsl(1,1),prsl(1,2),prsl(1,nlev)
+         print*,"dz:",dz(1,1),dz(1,2),dz(1,nlev)
+         print*,"u:",u(1,1),u(1,2),u(1,nlev)
+         print*,"v:",v(1,1),v(1,2),v(1,nlev)
+         print*,"sqv:",sqv(1,1),sqv(1,2),sqv(1,nlev)
+         print*,"sqc:",sqc(1,1),sqc(1,2),sqc(1,nlev)
+         print*,"sqi:",sqi(1,1),sqi(1,2),sqi(1,nlev)
          print*,"rmol:",rmol(1)," ust:",ust(1)
          print*," dx=",dx(1),"initflag=",initflag
          print*,"Tsurf:",tsurf(1)," Thetasurf:",ts(1)
@@ -759,15 +759,15 @@ SUBROUTINE mynnedmf_wrapper_run(        &
          print*,"qsfc:",qsfc(1)," ps:",ps(1)
          print*,"wspd:",wspd(1)," rb=",rb(1)
          print*,"znt:",znt(1)," delt=",delt
-         print*,"im=",im," levs=",levs
+         print*,"ncol=",ncol," nlev=",nlev
          print*,"PBLH=",pblh(1)," KPBL=",KPBL(1)," xland=",xland(1)
          print*,"ch=",ch(1)
-         !print*,"TKE:",TKE_PBL(1,1),TKE_PBL(1,2),TKE_PBL(1,levs)
-         print*,"qke:",qke(1,1),qke(1,2),qke(1,levs)
-         print*,"el_pbl:",el_pbl(1,1),el_pbl(1,2),el_pbl(1,levs)
-         print*,"Sh3d:",Sh3d(1,1),sh3d(1,2),sh3d(1,levs)
-         !print*,"exch_h:",exch_h(1,1),exch_h(1,2),exch_h(1,levs) ! - intent(out)
-         !print*,"exch_m:",exch_m(1,1),exch_m(1,2),exch_m(1,levs) ! - intent(out)
+         !print*,"TKE:",TKE_PBL(1,1),TKE_PBL(1,2),TKE_PBL(1,nlev)
+         print*,"qke:",qke(1,1),qke(1,2),qke(1,nlev)
+         print*,"el_pbl:",el_pbl(1,1),el_pbl(1,2),el_pbl(1,nlev)
+         print*,"Sh3d:",Sh3d(1,1),sh3d(1,2),sh3d(1,nlev)
+         !print*,"exch_h:",exch_h(1,1),exch_h(1,2),exch_h(1,nlev) ! - intent(out)
+         !print*,"exch_m:",exch_m(1,1),exch_m(1,2),exch_m(1,nlev) ! - intent(out)
          print*,"max cf_bl:",maxval(cldfra_bl(1,:))
       endif
 
@@ -826,9 +826,9 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &             edmf_thl=edmf_thl,edmf_ent=edmf_ent,edmf_qc=edmf_qc,& !output
      &             sub_thl=sub_thl,sub_sqv=sub_sqv,                    &
      &             det_thl=det_thl,det_sqv=det_sqv,                    &
-     &             lwp=lwp,iwp=iwp,swp=swp,cldceil=cldceil,            &
+     &             lwp=lwp_bl,iwp=iwp_bl,swp=swp_bl,cldceil=cldceil,   &
      &             wspd10=wspd10,wspd80=wspd80,wspd160=wspd160,        &
-     &             maxcldfra=maxcldfra,maxcldfra_pbl=maxcldfra_pbl,    &
+     &             maxcldfra=maxcldfra,maxcldfra_pbl=maxcldfra_bl,     &
      &             maxwidth=maxwidth,maxMF=maxMF,ztop_plume=ztop_plume,& !output
      &             excess_h=excess_h,excess_q=excess_q,                &
      &             maxwidth_dd=maxwidth_dd,maxmf_dd=maxmf_dd,          &
@@ -840,22 +840,22 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &             f_qc=flag_qc,f_qnc=flag_qnc,f_qs=flag_qs,           & !input
      &             f_qnwfa=FLAG_QNWFA,f_qnifa=FLAG_QNIFA,              & !input
      &             f_qnbca=FLAG_QNBCA,f_qoz=FLAG_OZONE,                & !input
-     &             IDS=1,IDE=im,JDS=1,JDE=1,KDS=1,KDE=levs,            & !input
-     &             IMS=1,IME=im,JMS=1,JME=1,KMS=1,KME=levs,            & !input
-     &             ITS=1,ITE=im,JTS=1,JTE=1,KTS=1,KTE=levs,            & !input
+     &             IDS=1,IDE=ncol,JDS=1,JDE=1,KDS=1,KDE=nlev,          & !input
+     &             IMS=1,IME=ncol,JMS=1,JME=1,KMS=1,KME=nlev,          & !input
+     &             ITS=1,ITE=ncol,JTS=1,JTE=1,KTS=1,KTE=nlev,          & !input
      &             errmsg=errmsg,errflg=errflg                         )
 
 
      ! POST MYNN (INTERSTITIAL) WORK:
         !update/save MYNN-only variables
-        !do k=1,levs
-        !   do i=1,im
+        !do k=1,nlev
+        !   do i=1,ncol
         !      gq0(i,k,4)=qke(i,k,1)      !tke*2
         !   enddo
         !enddo
         !For MYNN, convert TH-tend to T-tend
-        do k = 1, levs
-           do i = 1, im
+        do k = 1, nlev
+           do i = 1, ncol
               dtdt(i,k) = RTHBLTEN(i,k)*exner(i,k)
               dudt(i,k) = RUBLTEN(i,k)
               dvdt(i,k) = RVBLTEN(i,k)
@@ -870,8 +870,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
           endif
         endif accum_duvt3dt
         !Update T, U and V:
-        !do k = 1, levs
-        !   do i = 1, im
+        !do k = 1, nlev
+        !   do i = 1, ncol
         !      T3D(i,k) = adj_t(i,k) + RTHBLTEN(i,k)*exner(i,k)*delt
         !      u(i,k)   = u(i,k) + RUBLTEN(i,k)*delt
         !      v(i,k)   = v(i,k) + RVBLTEN(i,k)*delt
@@ -881,8 +881,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
         !DO moist/scalar/tracer tendencies:
         if (imp_physics == imp_physics_wsm6 .or. imp_physics == imp_physics_fa) then
            ! WSM6
-           do k=1,levs
-             do i=1,im
+           do k=1,nlev
+             do i=1,ncol
                dqdt_water_vapor(i,k)  = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_liquid_cloud(i,k) = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_ice(i,k)          = RQIBLTEN(i,k) !/(1.0 + qv(i,k))
@@ -896,8 +896,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
              call dtend_helper(100+ntiw,RQIBLTEN)
            endif
            !Update moist species:
-           !do k=1,levs
-           !  do i=1,im
+           !do k=1,nlev
+           !  do i=1,ncol
            !    qgrs_water_vapor(i,k)  = qgrs_water_vapor(i,k)  + (RQVBLTEN(i,k)/(1.0+RQVBLTEN(i,k)))*delt
            !    qgrs_liquid_cloud(i,k) = qgrs_liquid_cloud(i,k) + RQCBLTEN(i,k)*delt
            !    qgrs_ice(i,k)          = qgrs_ice(i,k)          + RQIBLTEN(i,k)*delt
@@ -907,8 +907,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
         elseif (imp_physics == imp_physics_thompson .or. imp_physics == imp_physics_tempo) then
            ! Thompson-Aerosol
            if(ltaerosol) then
-             do k=1,levs
-               do i=1,im
+             do k=1,nlev
+               do i=1,ncol
                  dqdt_water_vapor(i,k)             = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_liquid_cloud(i,k)            = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_cloud_droplet_num_conc(i,k)  = RQNCBLTEN(i,k)
@@ -929,8 +929,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
                call dtend_helper(100+ntwa,RQNWFABLTEN)
                call dtend_helper(100+ntia,RQNIFABLTEN)
              endif
-             !do k=1,levs
-             !  do i=1,im
+             !do k=1,nlev
+             !  do i=1,ncol
              !    qgrs_water_vapor(i,k)            = qgrs_water_vapor(i,k)    + (RQVBLTEN(i,k)/(1.0+RQVBLTEN(i,k)))*delt
              !    qgrs_liquid_cloud(i,k)           = qgrs_liquid_cloud(i,k)   + RQCBLTEN(i,k)*delt
              !    qgrs_ice(i,k)                    = qgrs_ice(i,k)            + RQIBLTEN(i,k)*delt
@@ -942,8 +942,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
              !  enddo
              !enddo
            else if(mraerosol .and. imp_physics == imp_physics_thompson) then
-             do k=1,levs
-               do i=1,im
+             do k=1,nlev
+               do i=1,ncol
                  dqdt_water_vapor(i,k)             = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_liquid_cloud(i,k)            = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_cloud_droplet_num_conc(i,k)  = RQNCBLTEN(i,k)
@@ -961,8 +961,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
              endif
            else
              !Thompson (2008)
-             do k=1,levs
-               do i=1,im
+             do k=1,nlev
+               do i=1,ncol
                  dqdt_water_vapor(i,k)   = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_liquid_cloud(i,k)  = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_ice(i,k)           = RQIBLTEN(i,k) !/(1.0 + qv(i,k))
@@ -978,8 +978,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
                call dtend_helper(100+ntinc,RQNIBLTEN)
                !call dtend_helper(100+ntsw,RQSBLTEN)
              endif
-             !do k=1,levs
-             !  do i=1,im
+             !do k=1,nlev
+             !  do i=1,ncol
              !    qgrs_water_vapor(i,k)            = qgrs_water_vapor(i,k)    + (RQVBLTEN(i,k)/(1.0+RQVBLTEN(i,k)))*delt
              !    qgrs_liquid_cloud(i,k)           = qgrs_liquid_cloud(i,k)   + RQCBLTEN(i,k)*delt
              !    qgrs_ice(i,k)                    = qgrs_ice(i,k)            + RQIBLTEN(i,k)*delt
@@ -990,8 +990,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
            endif !end thompson choice
         elseif (imp_physics == imp_physics_nssl) then
            ! NSSL
-             do k=1,levs
-               do i=1,im
+             do k=1,nlev
+               do i=1,ncol
                  dqdt_water_vapor(i,k)             = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_liquid_cloud(i,k)            = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                  dqdt_cloud_droplet_num_conc(i,k)  = RQNCBLTEN(i,k)
@@ -1006,8 +1006,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
 
         elseif (imp_physics == imp_physics_gfdl) then
            ! GFDL MP
-           do k=1,levs
-             do i=1,im
+           do k=1,nlev
+             do i=1,ncol
                dqdt_water_vapor(i,k)   = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_liquid_cloud(i,k)  = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_ice(i,k)           = RQIBLTEN(i,k) !/(1.0 + qv(i,k))
@@ -1022,8 +1022,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
              call dtend_helper(100+ntcw,RQCBLTEN)
              call dtend_helper(100+ntiw,RQIBLTEN)
            endif
-           !do k=1,levs
-           !  do i=1,im
+           !do k=1,nlev
+           !  do i=1,ncol
            !    qgrs_water_vapor(i,k)            = qgrs_water_vapor(i,k)    + (RQVBLTEN(i,k)/(1.0+RQVBLTEN(i,k)))*delt
            !    qgrs_liquid_cloud(i,k)           = qgrs_liquid_cloud(i,k)   + RQCBLTEN(i,k)*delt
            !    qgrs_ice(i,k)                    = qgrs_ice(i,k)            + RQIBLTEN(i,k)*delt
@@ -1032,8 +1032,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
            !enddo
        else
 !          print*,"In MYNN wrapper. Unknown microphysics scheme, imp_physics=",imp_physics
-           do k=1,levs
-             do i=1,im
+           do k=1,nlev
+             do i=1,ncol
                dqdt_water_vapor(i,k)   = RQVBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_liquid_cloud(i,k)  = RQCBLTEN(i,k) !/(1.0 + qv(i,k))
                dqdt_ice(i,k)           = 0.0
@@ -1053,17 +1053,17 @@ SUBROUTINE mynnedmf_wrapper_run(        &
        if (lprnt) then
           print*
           print*,"===Finished with mynn_bl_driver; output:"
-          print*,"T:",adj_t(1,1),adj_t(1,2),adj_t(1,levs)
-          print*,"TH:",th(1,1),th(1,2),th(1,levs)
-          print*,"rho:",rho(1,1),rho(1,2),rho(1,levs)
-          print*,"exner:",exner(1,1),exner(1,2),exner(1,levs)
-          print*,"prsl:",prsl(1,1),prsl(1,2),prsl(1,levs)
-          print*,"dz:",dz(1,1),dz(1,2),dz(1,levs)
-          print*,"u:",u(1,1),u(1,2),u(1,levs)
-          print*,"v:",v(1,1),v(1,2),v(1,levs)
-          print*,"sqv:",sqv(1,1),sqv(1,2),sqv(1,levs)
-          print*,"sqc:",sqc(1,1),sqc(1,2),sqc(1,levs)
-          print*,"sqi:",sqi(1,1),sqi(1,2),sqi(1,levs)
+          print*,"T:",adj_t(1,1),adj_t(1,2),adj_t(1,nlev)
+          print*,"TH:",th(1,1),th(1,2),th(1,nlev)
+          print*,"rho:",rho(1,1),rho(1,2),rho(1,nlev)
+          print*,"exner:",exner(1,1),exner(1,2),exner(1,nlev)
+          print*,"prsl:",prsl(1,1),prsl(1,2),prsl(1,nlev)
+          print*,"dz:",dz(1,1),dz(1,2),dz(1,nlev)
+          print*,"u:",u(1,1),u(1,2),u(1,nlev)
+          print*,"v:",v(1,1),v(1,2),v(1,nlev)
+          print*,"sqv:",sqv(1,1),sqv(1,2),sqv(1,nlev)
+          print*,"sqc:",sqc(1,1),sqc(1,2),sqc(1,nlev)
+          print*,"sqi:",sqi(1,1),sqi(1,2),sqi(1,nlev)
           print*,"rmol:",rmol(1)," ust:",ust(1)
           print*,"dx(1)=",dx(1),"initflag=",initflag
           print*,"Tsurf:",tsurf(1)," Thetasurf:",ts(1)
@@ -1071,20 +1071,20 @@ SUBROUTINE mynnedmf_wrapper_run(        &
           print*,"qsfc:",qsfc(1)," ps:",ps(1)
           print*,"wspd:",wspd(1)," rb=",rb(1)
           print*,"znt:",znt(1)," delt=",delt
-          print*,"im=",im," levs=",levs
+          print*,"im=",ncol," nlev=",nlev
           print*,"PBLH=",pblh(1)," KPBL=",KPBL(1)," xland=",xland(1)
           print*,"ch=",ch(1)
-          print*,"qke:",qke(1,1),qke(1,2),qke(1,levs)
-          print*,"el_pbl:",el_pbl(1,1),el_pbl(1,2),el_pbl(1,levs)
-          print*,"Sh3d:",Sh3d(1,1),sh3d(1,2),sh3d(1,levs)
-          print*,"exch_h:",exch_h(1,1),exch_h(1,2),exch_h(1,levs)
-          print*,"exch_m:",exch_m(1,1),exch_m(1,2),exch_m(1,levs)
+          print*,"qke:",qke(1,1),qke(1,2),qke(1,nlev)
+          print*,"el_pbl:",el_pbl(1,1),el_pbl(1,2),el_pbl(1,nlev)
+          print*,"Sh3d:",Sh3d(1,1),sh3d(1,2),sh3d(1,nlev)
+          print*,"exch_h:",exch_h(1,1),exch_h(1,2),exch_h(1,nlev)
+          print*,"exch_m:",exch_m(1,1),exch_m(1,2),exch_m(1,nlev)
           print*,"max cf_bl:",maxval(cldfra_bl(1,:))
           print*,"max qc_bl:",maxval(qc_bl(1,:))
-          print*,"dtdt:",dtdt(1,1),dtdt(1,2),dtdt(1,levs)
-          print*,"dudt:",dudt(1,1),dudt(1,2),dudt(1,levs)
-          print*,"dvdt:",dvdt(1,1),dvdt(1,2),dvdt(1,levs)
-          print*,"dqdt:",dqdt_water_vapor(1,1),dqdt_water_vapor(1,2),dqdt_water_vapor(1,levs)
+          print*,"dtdt:",dtdt(1,1),dtdt(1,2),dtdt(1,nlev)
+          print*,"dudt:",dudt(1,1),dudt(1,2),dudt(1,nlev)
+          print*,"dvdt:",dvdt(1,1),dvdt(1,2),dvdt(1,nlev)
+          print*,"dqdt:",dqdt_water_vapor(1,1),dqdt_water_vapor(1,2),dqdt_water_vapor(1,nlev)
           print*,"ztop_plume:",ztop_plume(1)," maxmf:",maxmf(1)
           print*,"maxwidth:",maxwidth(1)
           print*
@@ -1102,8 +1102,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
 
        if(imfdeepcnv == imfdeepcnv_c3 .or. imfdeepcnv == imfdeepcnv_samf)then
           !LB: save PBL q-tendency for use in prognostic closure
-          do k=1,levs
-             do i=1,im
+          do k=1,nlev
+             do i=1,ncol
                 tmf(i,k,1)=dqdt_water_vapor(i,k)
              enddo
           enddo
@@ -1116,8 +1116,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
   CONTAINS
 
     SUBROUTINE dtend_helper(itracer,field,mult)
-      real(kind_phys), intent(in) :: field(im,levs)
-      real(kind_phys), intent(in), optional :: mult(im,levs)
+      real(kind_phys), intent(in) :: field(ncol,nlev)
+      real(kind_phys), intent(in), optional :: mult(ncol,nlev)
       integer, intent(in) :: itracer
       integer :: idtend
       
