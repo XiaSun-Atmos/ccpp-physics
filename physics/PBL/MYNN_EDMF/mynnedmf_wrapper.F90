@@ -307,6 +307,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &        RQCBLTEN, RQNCBLTEN, RQIBLTEN, RQNIBLTEN, RQSBLTEN,        &
      &        RQNWFABLTEN, RQNIFABLTEN, RQNBCABLTEN, adj_t
 
+      real(kind_phys), dimension(ncol,nlev+1) :: wi
+
      !smoke/chem arrays
       real(kind_phys), dimension(:), intent(inout), optional :: frp
       logical, intent(in) :: mix_chem, enh_mix
@@ -315,6 +317,8 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       real(kind_phys), dimension(:,:  ), intent(in), optional :: vdep
       real(kind_phys), dimension(ncol)   :: emis_ant_no
 
+      !local arrays additional j dimension
+      real(kind_phys), allocatable, dimension(:,:,:)   :: prsij, wij
       !local smoke/chem arrays with additional j dimension
       real(kind_phys), allocatable, dimension(:,:,:,:) :: chem3dj, settle3dj
       real(kind_phys), allocatable, dimension(:,:,:)   :: vdepj
@@ -600,38 +604,32 @@ SUBROUTINE mynnedmf_wrapper_run(        &
              tmf(i,k,1)=0.
           enddo
        enddo
-       
-       
-  ! Check incoming moist species to ensure non-negative values
+
   ! First, create height difference (dz)
       do k=1,nlev
          do i=1,ncol
             dz(i,k)=(phii(i,k+1) - phii(i,k))*g_inv
-         enddo
-      enddo
-
-      do i=1,ncol
-         do k=1,nlev
-            delp(i,k) = prsi(i,k) - prsi(i,k+1)
-         enddo
-      enddo
-
-      ! do i=1,ncol
-      !    call moisture_check2(nlev, delt,            &
-      !                         delp(i,:), exner(i,:), &
-      !                         sqv(i,:),  sqc(i,:),   &
-      !                         sqi(i,:),  kzero(:),   &
-      !                         adj_t(i,:)             )
-      ! enddo
-      
-      do k=1,nlev
-         do i=1,ncol
             th(i,k)=adj_t(i,k)/exner(i,k)
             rho(i,k)=prsl(i,k)/(r_d*adj_t(i,k)*(1.+p608*max(sqv(i,k),1e-8)))
             w(i,k) = -omega(i,k)/(rho(i,k)*grav)
          enddo
       enddo
-      
+
+  ! Calculate w at interface levels
+      wi(:,1)      = zero
+      wi(:,nlev+1) = zero
+      do k=1,nlev-1
+         do i=1,ncol
+            wi(i,k+1)=(dz(i,k)*w(i,k+1) + dz(i,k+1)*w(i,k))/(dz(i,k)+dz(i,k+1))
+         enddo
+      enddo
+
+      do k=1,nlev
+         do i=1,ncol
+            delp(i,k) = prsi(i,k) - prsi(i,k+1)
+         enddo
+      enddo
+
       !intialize more variables
       do i=1,ncol
          if (slmsk(i)==1. .or. slmsk(i)==2.) then !sea/land/ice mask (=0/1/2) in FV3
@@ -645,11 +643,6 @@ SUBROUTINE mynnedmf_wrapper_run(        &
          ch(i)=0.0
          hfx(i)=hflx(i)*rho(i,1)*cp
          qfx(i)=qflx(i)*rho(i,1)
-         !filter bad incoming fluxes
-         if (hfx(i) > 1200.)hfx(i) = 1200.
-         if (hfx(i) < -500.)hfx(i) = -500.
-         if (qfx(i) > .0005)qfx(i) = 0.0005
-         if (qfx(i) < -.0002)qfx(i) = -0.0002
 
          dtsfc1(i) = hfx(i)
          dqsfc1(i) = qfx(i)*XLV
@@ -732,6 +725,11 @@ SUBROUTINE mynnedmf_wrapper_run(        &
       allocate(emis_ant_noj(ncol,1))
       emis_ant_noj(:,1)=emis_ant_no(:)
 
+      allocate(prsij(ncol,nlev+1,1))
+      prsij(:,:,1)=prsi(:,:)
+      allocate(wij(ncol,nlev+1,1))
+      wij(:,:,1)=wi(:,:)
+
       if (lprnt) then
          print*
          write(0,*)"===CALLING mynn_bl_driver; input:"
@@ -776,7 +774,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &             initflag=initflag,restart=flag_restart,             &
      &             cycling=cycling,                                    &
      &             delt=delt,dz=dz,dx=dx,znt=znt,                      &
-     &             u=u,v=v,w=w,th=th,sqv=sqv,sqc=sqc,                  &
+     &             u=u,v=v,w=wij,th=th,sqv=sqv,sqc=sqc,                &
      &             sqi=sqi,sqs=sqs,qnc=qnc,qni=qni,                    &
      &             qnwfa=qnwfa,qnifa=qnifa,qnbca=qnbca,qoz=ozone,      &
      &             p=prsl,exner=exner,rho=rho,tk=adj_t,                &
@@ -784,7 +782,7 @@ SUBROUTINE mynnedmf_wrapper_run(        &
      &             ust=ust,ch=ch,hfx=hfx,qfx=qfx,                      &
      &             wspd=wspd,uoce=uoce,voce=voce,                      & !input
      &             qke=QKE,qke_adv=qke_adv,                            & !output  !GJF qke_adv needs to be intent(in)
-     &             sh3d=Sh3d,sm3d=Sm3d,pint=prsi,                      &
+     &             sh3d=Sh3d,sm3d=Sm3d,pint=prsij,                     &
 !chem/smoke
      &             nchem=nchem,ndvel=ndvel,settle3d=settle3dj,         &
      &             Chem3d=chem3dj,Vd3d=vdepj,                          &
